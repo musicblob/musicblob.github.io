@@ -759,10 +759,10 @@ function applyShapeViewSettings(shapeIndex) {
 function applyShapeInteractionSettings(shapeIndex) {
     document.body.classList.toggle('mode-chaos', shapeIndex === 2);
     if (shapeIndex === 2) {
-        blob.mouseSensitivity = isMobileView() ? 3.4 : 2.4;
-        blob.rotationSpeed = isMobileView() ? 0.8 : 1.5;
-        blob.inertialTime = isMobileView() ? 6 : 4;
-        blob.mouseDistanceMax = 520;
+        blob.mouseSensitivity = isMobileView() ? 1.05 : 1.1;
+        blob.rotationSpeed = isMobileView() ? 2.2 : 2.5;
+        blob.inertialTime = isMobileView() ? 2.5 : 3;
+        blob.mouseDistanceMax = 400;
     } else {
         blob.mouseSensitivity = isMobileView() ? 1.4 : 1;
         blob.rotationSpeed = isMobileView() ? 4 : 5;
@@ -1030,8 +1030,14 @@ function emitMouse(type, touch) {
     }));
 }
 
+function getTouchDamp() {
+    if (currentShape === 2) return isMobileView() ? 0.32 : 0.55;
+    return isMobileView() ? 0.72 : 1;
+}
+
 var blobContainer = document.getElementById('blob_container');
 var touchStart = null;
+var touchEmit = null;
 var touchMoved = false;
 var lastPanelTap = 0;
 
@@ -1039,27 +1045,32 @@ blobContainer.addEventListener('touchstart', function(e) {
     if (e.touches.length !== 1) return;
     var t = e.touches[0];
     touchStart = { x: t.clientX, y: t.clientY };
+    touchEmit = { x: t.clientX, y: t.clientY };
     touchMoved = false;
     emitMouse('mousemove', t);
 }, { passive: true });
 
 blobContainer.addEventListener('touchmove', function(e) {
-    if (e.touches.length !== 1 || !touchStart) return;
+    if (e.touches.length !== 1 || !touchStart || !touchEmit) return;
     var t = e.touches[0];
     var dx = t.clientX - touchStart.x;
     var dy = t.clientY - touchStart.y;
-    if (Math.abs(dx) + Math.abs(dy) > 8) {
+    if (Math.abs(dx) + Math.abs(dy) > 12) {
         touchMoved = true;
     }
     if (touchMoved) {
         e.preventDefault();
-        emitMouse('mousemove', t);
+        var damp = getTouchDamp();
+        touchEmit.x += (t.clientX - touchEmit.x) * damp;
+        touchEmit.y += (t.clientY - touchEmit.y) * damp;
+        emitMouse('mousemove', touchEmit);
     }
 }, { passive: false });
 
 blobContainer.addEventListener('touchend', function() {
     if (!isMobileView() || !touchStart) {
         touchStart = null;
+        touchEmit = null;
         return;
     }
 
@@ -1078,6 +1089,7 @@ blobContainer.addEventListener('touchend', function() {
     }
 
     touchStart = null;
+    touchEmit = null;
     touchMoved = false;
 });
 
