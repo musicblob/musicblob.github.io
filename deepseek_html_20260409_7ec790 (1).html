@@ -1,0 +1,1108 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>BlobAnimation · Bass Kick Reactive</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --term-bg: #050805;
+    --term-border: #3d7a3d;
+    --term-text: #6bff6b;
+    --term-dim: #2a5a2a;
+    --term-accent: #88ccff;
+    --term-warn: #ff6666;
+    --term-shadow: #112211;
+  }
+
+  body {
+    background: #0e0e0e;
+    color: var(--term-text);
+    font-family: 'Courier New', Courier, monospace;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    min-height: 100dvh;
+    overflow: hidden;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  #blob_container {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    background: #0a0a1a;
+    touch-action: none;
+    cursor: pointer;
+  }
+
+  .ui {
+    position: fixed;
+    bottom: 16px;
+    left: 16px;
+    z-index: 10;
+    width: min(320px, calc(100vw - 32px));
+    pointer-events: none;
+    background: var(--term-bg);
+    border: 2px solid var(--term-border);
+    box-shadow: 4px 4px 0 var(--term-shadow);
+    padding: 0;
+    image-rendering: pixelated;
+  }
+
+  .term-header {
+    padding: 4px 8px;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--term-accent);
+    border-bottom: 2px solid var(--term-dim);
+    background: #081008;
+  }
+
+  .shapes-panel {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    border-bottom: 2px solid var(--term-dim);
+    pointer-events: all;
+  }
+
+  .term-label {
+    font-size: 9px;
+    color: var(--term-dim);
+    letter-spacing: 0.1em;
+    margin-right: 2px;
+    flex-shrink: 0;
+  }
+
+  .shape-btn {
+    flex: 1;
+    min-width: 0;
+    height: 26px;
+    border: 2px solid var(--term-border);
+    border-radius: 0;
+    background: #081008;
+    color: var(--term-dim);
+    font-family: inherit;
+    font-size: 10px;
+    font-weight: bold;
+    cursor: pointer;
+    padding: 0;
+    transition: none;
+  }
+
+  .shape-btn.active {
+    background: var(--term-text);
+    color: #000;
+    border-color: var(--term-text);
+    box-shadow: inset 0 0 0 1px #000;
+  }
+
+  .file-controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 6px;
+    padding: 6px 8px 8px;
+    pointer-events: all;
+  }
+
+  .file-label,
+  .play-pause,
+  .mic-btn {
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: inherit;
+    font-size: 9px;
+    font-weight: bold;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    border: 2px solid var(--term-border);
+    border-radius: 0;
+    background: #081008;
+    color: var(--term-text);
+    padding: 0 4px;
+    transition: none;
+  }
+
+  .file-label:active,
+  .play-pause:active:not(:disabled),
+  .mic-btn:active {
+    transform: translate(1px, 1px);
+    box-shadow: none;
+  }
+
+  .play-pause:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+    color: var(--term-dim);
+  }
+
+  .mic-btn.active {
+    background: var(--term-warn);
+    border-color: var(--term-warn);
+    color: #000;
+  }
+
+  .time-info {
+    grid-column: 1 / -1;
+    font-size: 10px;
+    font-family: inherit;
+    color: var(--term-accent);
+    background: #081008;
+    border: 2px solid var(--term-dim);
+    padding: 4px 8px;
+    text-align: center;
+    letter-spacing: 0.08em;
+  }
+
+  .debug {
+    position: fixed;
+    top: calc(10px + env(safe-area-inset-top, 0px));
+    left: 10px;
+    right: 10px;
+    font-size: 9px;
+    color: var(--term-text);
+    background: var(--term-bg);
+    border: 2px solid var(--term-dim);
+    box-shadow: 3px 3px 0 var(--term-shadow);
+    padding: 4px 8px;
+    font-family: inherit;
+    z-index: 20;
+    pointer-events: none;
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  #mp3Upload { display: none; }
+
+  .tap-hint {
+    display: none;
+  }
+
+  @media (max-width: 640px) {
+    .ui,
+    .debug {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transition: opacity 0.2s steps(3), transform 0.2s steps(3), visibility 0.2s;
+    }
+
+    body.controls-visible .ui,
+    body.controls-visible .debug {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    body.controls-visible .file-controls,
+    body.controls-visible .shapes-panel,
+    body.controls-visible .shape-btn,
+    body.controls-visible .mic-btn,
+    body.controls-visible .play-pause,
+    body.controls-visible .file-label {
+      pointer-events: all;
+    }
+
+    .ui {
+      left: 8px;
+      right: 8px;
+      bottom: 0;
+      width: auto;
+      transform: translateY(110%);
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+
+    body.controls-visible .ui {
+      transform: translateY(0);
+    }
+
+    .debug {
+      transform: translateY(-6px);
+    }
+
+    body.controls-visible .debug {
+      transform: translateY(0);
+    }
+
+    .tap-hint {
+      display: block;
+      position: fixed;
+      bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 5;
+      font-family: inherit;
+      font-size: 9px;
+      letter-spacing: 0.1em;
+      color: var(--term-dim);
+      background: var(--term-bg);
+      border: 2px solid var(--term-dim);
+      padding: 4px 10px;
+      pointer-events: none;
+      transition: opacity 0.2s;
+    }
+
+    body.mode-chaos .tap-hint::after {
+      content: ' // DBL-TAP=PANEL';
+    }
+
+    body.controls-visible .tap-hint {
+      opacity: 0;
+    }
+  }
+</style>
+</head>
+<body>
+
+<div id="blob_container"></div>
+<div class="tap-hint" id="tapHint">&gt; TAP TO OPEN</div>
+
+<div class="ui">
+  <div class="term-header">BLOB.SYS // AUDIO REACTIVE</div>
+  <div class="shapes-panel">
+    <span class="term-label">MODE</span>
+    <button class="shape-btn active" data-shape="0" title="Organic">01</button>
+    <button class="shape-btn" data-shape="1" title="Spiky">02</button>
+    <button class="shape-btn" data-shape="2" title="Chaos">03</button>
+    <button class="shape-btn" data-shape="3" title="Gentle">04</button>
+  </div>
+  <div class="file-controls">
+    <label class="file-label" for="mp3Upload">[ LOAD ]</label>
+    <input type="file" id="mp3Upload" accept="audio/*">
+    <button class="play-pause" id="playPauseBtn" disabled>[ PLAY ]</button>
+    <button class="mic-btn" id="micBtn">[ MIC ]</button>
+    <div class="time-info" id="timeDisplay">--:-- / --:--</div>
+  </div>
+</div>
+
+<div class="debug" id="dbg">&gt; INIT...</div>
+
+<script>
+// ==================== JSband (полная версия) ====================
+window.jsband = {};
+
+jsband.Metronome = function() {
+  var listeners = [], rafId;
+  function tick(ts) {
+    for (var i = 0; i < listeners.length; i++) listeners[i](ts);
+    rafId = requestAnimationFrame(tick);
+  }
+  rafId = requestAnimationFrame(tick);
+  this.addListener = function(fn) { listeners.push(fn); };
+  this.removeListener = function(fn) { var i = listeners.indexOf(fn); if(i>-1) listeners.splice(i,1); };
+  this.removeAllListeners = function() { listeners = []; };
+  this.clear = function() { cancelAnimationFrame(rafId); };
+};
+
+jsband.Ease = {
+  lin: function(){ return function(t){ return t; }; },
+  pow: function(n){ return function(t){ return t<.5 ? Math.pow(2*t,n)/2 : 1-Math.pow(2*(1-t),n)/2; }; },
+  sin: function(){ return function(t){ return .5-.5*Math.cos(Math.PI*t); }; },
+  circ: function(){ return function(t){ return t<.5 ? (1-Math.sqrt(1-4*t*t))/2 : (Math.sqrt(1-(2*t-2)*(2*t-2))+1)/2; }; },
+  exp: function(){ return function(t){ return t===0?0:t===1?1: t<.5?Math.pow(2,20*t-10)/2:(2-Math.pow(2,-20*t+10))/2; }; },
+  osc2Out: function(){ return function(t){ var c4=2*Math.PI/3; return t===0?0:t===1?1:Math.pow(2,-10*t)*Math.sin((t*10-0.75)*c4)+1; }; },
+  bncOut: function(){ return function(t){ var n1=7.5625,d1=2.75; if(t<1/d1)return n1*t*t; else if(t<2/d1)return n1*(t-=1.5/d1)*t+.75; else if(t<2.5/d1)return n1*(t-=2.25/d1)*t+.9375; else return n1*(t-=2.625/d1)*t+.984375; }; },
+  backOut: function(){ return function(t){ var c1=1.70158,c3=c1+1; return 1+c3*Math.pow(t-1,3)+c1*Math.pow(t-1,2); }; }
+};
+
+jsband.Tween = {
+  run: function(obj, target, ease, duration, metro) {
+    var start = {}, keys = Object.keys(target), t0 = null, alive = true;
+    for (var k of keys) start[k] = obj[k];
+    function step(ts) {
+      if (!alive) return;
+      if (!t0) t0 = ts;
+      var progress = Math.min((ts - t0) / duration, 1);
+      var e = ease(progress);
+      for (var k of keys) obj[k] = start[k] + (target[k] - start[k]) * e;
+      if (progress >= 1) metro.removeListener(step);
+    }
+    metro.addListener(step);
+    return { stop: function(){ alive=false; metro.removeListener(step); } };
+  }
+};
+
+jsband.CssProp = { set: function(el, props){ Object.assign(el.style, props); } };
+
+jsband.Queue = function(){
+  var self = this;
+  this.delay = 0;
+  this._items = [];
+  this.addTween = function(obj, target, ease, dur, metro){ this._items.push({obj,target,ease,dur,metro}); };
+  this.addQueue = function(q){ this._items.push({queue:q}); };
+  this.run = function(){
+    var idx = 0;
+    function next(){
+      if(idx >= self._items.length){ idx = 0; }
+      var item = self._items[idx++];
+      if(item.queue){ setTimeout(next, (self.delay||0)*1000); return; }
+      var handle = jsband.Tween.run(item.obj, item.target, item.ease, item.dur*1000, item.metro);
+      setTimeout(next, item.dur*1000 + (self.delay||0)*1000);
+    }
+    setTimeout(next, (self.delay||0)*1000);
+  };
+};
+
+jsband.Swing = function(obj, prop, settings, metro){
+  var amp = settings.amplitude !== undefined ? settings.amplitude : 10;
+  var freq = settings.frequency !== undefined ? settings.frequency : 1;
+  var phase = settings.phase !== undefined ? settings.phase : 0;
+  var waveFn = settings.wave || Math.sin;
+  var base = obj[prop] || 0;
+  var t0 = null;
+  function tick(ts){
+    if(!t0) t0 = ts;
+    var t = (ts - t0) / 1000;
+    obj[prop] = base + amp * waveFn(freq * t + phase);
+  }
+  this.play = function(){ metro.addListener(tick); };
+  this.stop = function(){ metro.removeListener(tick); };
+};
+
+jsband.Wave = { sin: Math.sin, triangle: function(x){ return 2/Math.PI*Math.asin(Math.sin(x)); }, pulse: function(x){ return Math.sin(x)>0?1:-1; } };
+
+jsband.Motion = function(obj, props, metro){
+  var speeds = Object.assign({}, props);
+  var lastTs = null;
+  function tick(ts){
+    if(!lastTs) lastTs = ts;
+    var dt = (ts - lastTs) / 1000;
+    lastTs = ts;
+    for (var k in speeds) obj[k] = (obj[k]||0) + speeds[k] * dt;
+  }
+  this.play = function(){ metro.addListener(tick); };
+  this.stop = function(){ metro.removeListener(tick); };
+};
+
+// ==================== BlobAnimation (оригинал) ====================
+(function() {
+    function d(d, b, f, t) {
+        return isNaN(d) ? b : d < f ? f : d > t ? t : d
+    }
+    function qa(d, b) {
+        for (var f = {}, t = 1; 4 > t; t++) {
+            var E = d["wave" + t];
+            if (E)
+                for (var s in E)
+                    !isNaN(E[s]) && s in ra && (f[ra[s] + t] = E[s])
+        }
+        if (b)
+            for (s in Ia)
+                s in f || (f[s] = 0);
+        return f
+    }
+    function N(M, b) {
+        function Z(a) {
+            m.width = y.clientWidth;
+            m.height = y.clientHeight
+        }
+        function t(a, c, b) {
+            b = $ / (aa + b);
+            return {
+                x: b * a,
+                y: b * c,
+                alpha: 1 > b ? b * b : 1,
+                scale: b
+            }
+        }
+        function E() {
+            var a, b, d, e, f, k, h;
+            O = Math.sqrt(z * z + A * A);
+            n = z / O || 1E-4;
+            p = -A / O || 1E-4;
+            P = Math.sin(c.angle);
+            F = Math.cos(c.angle);
+            e = [[n * n + p * p * F, n * p * (1 - F), p * P], [n * p * (1 - F), p * p + n * n * F, -n * P], [-p * P, n * P, (n * n + p * p) * F]];
+            h = q;
+            var l = [], g;
+            for (g = 0; 3 > g; g++)
+                for (l[g] = [],
+                a = 0; 3 > a; a++)
+                    l[g][a] = e[g][0] * h[0][a] + e[g][1] * h[1][a] + e[g][2] * h[2][a];
+            q = l;
+            m.width = m.width;
+            U.fillStyle = ba;
+            U.translate(m.width / 2, m.height / 2);
+            for (l = ca; l--; )
+                for (e = l / ca * V - Aa, g = h = Math.round(ca * Math.cos(e) * 2); g--; )
+                    a = g / h * 2 * V - V,
+                    d = (Q + c.amp1 * Math.sin(c.freq1 * e + c.pha1)) * Math.cos(e) * Math.cos(a),
+                    f = (Q + c.amp2 * Math.sin(c.freq2 * a + c.pha2)) * Math.cos(e) * Math.sin(a),
+                    k = (Q + c.amp3 * Math.sin(c.freq3 * e + c.pha3)) * Math.sin(e),
+                    a = q[0][0] * d + q[0][1] * f + q[0][2] * k,
+                    b = q[1][0] * d + q[1][1] * f + q[1][2] * k,
+                    d = q[2][0] * d + q[2][1] * f + q[2][2] * k,
+                    a = t(a, b, d),
+                    b = da * a.scale,
+                    U.globalAlpha = a.alpha,
+                    0 < b && U.fillRect(a.x, a.y, b, b)
+        }
+        function s(a) {
+            var b = m.getBoundingClientRect();
+            return {
+                x: a.clientX - b.left,
+                y: a.clientY - b.top
+            }
+        }
+        function ea(a) {
+            fa = (new Date).getTime();
+            fa - sa > 1E3 / Ba && (l = s(a),
+            G = l.x - ga,
+            H = l.y - ha,
+            I = Math.sqrt(G * G + H * H),
+            W = Math.sqrt((l.x - m.width / 2) * (l.x - m.width / 2) + (l.y - m.height / 2) * (l.y - m.height / 2)),
+            I && W < J && (ia = W < u ? 1 : (J - W) / (J - u),
+            Math.abs(Math.acos((G * ta + H * ua) / (va * I))) > Math.PI / 2 && (K *= -1),
+            Math.min(I, wa) * B * ia > Math.abs(c.angle) && (xa.stop(),
+            c.angle = K * Math.min(I, wa) * B * ia,
+            A = K * G,
+            z = K * H,
+            xa = Ca.run(c, {
+                angle: K * X
+            }, f.powOut(3), ja, C)),
+            ta = G,
+            ua = H,
+            va = I),
+            ga = l.x,
+            ha = l.y,
+            sa = fa)
+        }
+        function R(a) {
+            document.removeEventListener("mousemove", R);
+            l = s(a);
+            ga = l.x;
+            ha = l.y;
+            document.addEventListener("mousemove", ea)
+        }
+        var ka = document.getElementById(M);
+        if (ka) {
+            N.instances[M] && N.instances[M].destroy();
+            N.instances[M] = this;
+            b || (b = {});
+            var e = Number.POSITIVE_INFINITY
+              , Ba = 30
+              , wa = 100
+              , V = Math.PI
+              , Aa = V / 2
+              , ca = d(b.DETALISATION, 80, 1, e)
+              , Q = d(b.BLOB_SIZE, 220, 1, e)
+              , S = d(b.BLOB_DISTANCE, 1E3, 0, e)
+              , X = d(b.ROTATION_SPEED, 5, 0, e) / 1E3
+              , v = d(b.PERSPECTIVE_DISTORTION, 1, .001, e)
+              , da = d(b.DOT_SIZE, 2, 0, e)
+              , ba = b.DOT_COLOR || "black"
+              , u = d(b.MOUSE_DISTANCE_MIN, 20, 0, e)
+              , J = d(b.MOUSE_DISTANCE_MAX, u + 400, u + .001, e)
+              , B = d(b.MOUSE_SENSITIVITY, 1, 0, e) / 1E3
+              , ja = 1E3 * d(b.INERTIAL_TIME, 2, 0, e)
+              , Da = b.INITIAL_SHAPE || {
+                wave1: { amplitude: 70, frequency: 3, phase: 0 },
+                wave2: { amplitude: 60, frequency: 2, phase: 0 },
+                wave3: { amplitude: 50, frequency: 2, phase: 0 }
+            }
+              , Y = b.USE_MORPHING
+              , la = b.USE_WAVE_MOTION
+              , ya = b.USE_WAVE_SWING
+              , Ea = "MORPHING_AUTOPLAY" in b ? b.MORPHING_AUTOPLAY : !0
+              , za = d(b.MORPHING_DURATION, 2, 0, e)
+              , Fa = d(b.MORPHING_DELAY, 1, 0, e)
+              , L = b.MORPHING_TRANSITION_TYPE || "cubic"
+              , g = b.MORPHING_SHAPES || [];
+            if (la && Y && g.length)
+                for (var r = 1; 4 > r; r++)
+                    if (b["WAVE_" + r + "_MOTION_SPEED"])
+                        for (var k = g.length; k--; ) {
+                            var T = g[k]["wave" + r];
+                            T && "phase" in T && delete T.phase
+                        }
+            if (ya)
+                for (r = 1; 4 > r; r++) {
+                    var w = b["WAVE_" + r + "_SWING_SETTINGS"];
+                    if (w) {
+                        for (var D in w) {
+                            var h = w[D];
+                            if (h) {
+                                if (Y)
+                                    for (k = g.length; k--; )
+                                        (T = g[k]["wave" + r]) && D in T && delete T[D];
+                                "type" in h && (h.wave = ("function" === typeof h.type ? h.type : Ja[h.type]) || Math.sin,
+                                delete h.type);
+                                "amplitude" in h && isNaN(h.amplitude) && delete h.amplitude;
+                                "frequency" in h && isNaN(h.frequency) && delete h.frequency;
+                                "phase" in h && isNaN(h.phase) && delete h.phase
+                            }
+                        }
+                        w.phase && la && (b["WAVE_" + r + "_MOTION_SPEED"] = 0)
+                    }
+                }
+            var na = b.WAVE_1_MOTION_SPEED, oa = b.WAVE_2_MOTION_SPEED, pa = b.WAVE_3_MOTION_SPEED, aa = S / v, $ = 1E3 / v, y = function() {
+                var a = document.createElement("div");
+                jsband.CssProp.set(a, {
+                    position: "relative",
+                    width: "100%",
+                    height: "100%",
+                    top: 0,
+                    left: 0,
+                    margin: 0,
+                    userSelect: "none",
+                    overflow: "hidden",
+                    cursor: "default"
+                });
+                a.setAttribute("unselectable", "on");
+                ka.appendChild(a);
+                return a
+            }(), m = function() {
+                var a = document.createElement("canvas");
+                jsband.CssProp.set(a, {
+                    position: "absolute",
+                    width: "100%",
+                    height: "100%",
+                    top: 0,
+                    left: 0,
+                    margin: 0
+                });
+                a.width = y.clientWidth;
+                a.height = y.clientHeight;
+                y.appendChild(a);
+                return a
+            }(), U = m.getContext("2d"), C = new jsband.Metronome(), c = function() {
+                var a = {
+                    set: function(a) {
+                        for (var b in a)
+                            this[b] = a[b]
+                    },
+                    angle: X
+                }, b = qa(Da, !0), c;
+                for (c in b)
+                    a[c] = b[c];
+                return a
+            }(), A = 5, z = 5, K = 1, xa = {
+                stop: function() {}
+            }, P = Math.sin(c.angle), F = Math.cos(c.angle), O = Math.sqrt(z * z + A * A), n = z / O, p = -A / O, q = [[1, 0, 0], [0, 1, 0], [0, 0, 1]], W, ia, l, ta = 0, ua = 0, va = 0, G, H, I, ga, ha, fa, sa = (new Date).getTime(), x;
+            
+            var f = { powOut: function(n){ return function(t){ return 1-Math.pow(1-t,n); }; } };
+            var Ca = { run: function(obj, target, ease, dur, metro) {
+                var start = {}, keys = Object.keys(target), t0 = null, alive = true;
+                for (var kk of keys) start[kk] = obj[kk];
+                function step(ts){ if(!alive) return; if(!t0) t0=ts; var pr=Math.min((ts-t0)/dur,1); var e=ease(pr); for(var kk of keys) obj[kk]=start[kk]+(target[kk]-start[kk])*e; if(pr>=1) metro.removeListener(step); }
+                metro.addListener(step);
+                return { stop: function(){ alive=false; metro.removeListener(step); } };
+            } };
+            
+            this.resize = function() { Z(); };
+            this.destroy = function() {
+                N.instances[M] = null;
+                C.removeAllListeners();
+                C.clear();
+                window.removeEventListener("resize", Z);
+                document.removeEventListener("mousemove", R);
+                document.removeEventListener("mousemove", ea);
+            };
+            this.morphTo = function(a) {
+                if (Y && g.length) {
+                    var b;
+                    a && "object" === typeof a ? b = a : !isNaN(a) && 0 <= a && a < g.length && !(a - Math.floor(a)) && (b = g[a]);
+                    b && Ca.run(c, qa(b), f.powOut(3), 1E3 * za, C)
+                }
+            };
+            Object.defineProperties(this, {
+                blobSize: { get: function(){ return Q; }, set: function(a){ Q = d(a, 220, 1, e); }, configurable:!0 },
+                blobDistance: { get: function(){ return S; }, set: function(a){ S = d(a, 1E3, 0, e); aa = S/v; $ = 1E3/v; }, configurable:!0 },
+                rotationSpeed: { get: function(){ return X; }, set: function(a){ c.angle = X = d(a, 5, 0, e) / 1E3; }, configurable:!0 },
+                perspectiveDistortion: { get: function(){ return v; }, set: function(a){ v = d(a, 1, .001, e); aa = S/v; $ = 1E3/v; }, configurable:!0 },
+                dotSize: { get: function(){ return da; }, set: function(a){ da = d(a, 2, 0, e); }, configurable:!0 },
+                dotColor: { get: function(){ return ba; }, set: function(a){ ba = a || "black"; }, configurable:!0 },
+                mouseDistanceMin: { get: function(){ return u; }, set: function(a){ u = d(a, 20, 0, J - 1E-4); }, configurable:!0 },
+                mouseDistanceMax: { get: function(){ return J; }, set: function(a){ J = d(a, u + 400, u + .001, e); }, configurable:!0 },
+                mouseSensitivity: { get: function(){ return B; }, set: function(a){ var b = B; (B = d(a, 1, 0, e) / 1E3) && !b ? document.addEventListener("mousemove", R) : b && !B && (document.removeEventListener("mousemove", R), document.removeEventListener("mousemove", ea)); }, configurable:!0 },
+                inertialTime: { get: function(){ return ja; }, set: function(a){ ja = 1E3 * d(a, 2, 0, e); }, configurable:!0 },
+                wave1Amplitude: { get: function(){ return c.amp1; }, set: function(a){ c.amp1 = a; }, configurable:!0 },
+                wave2Amplitude: { get: function(){ return c.amp2; }, set: function(a){ c.amp2 = a; }, configurable:!0 },
+                wave3Amplitude: { get: function(){ return c.amp3; }, set: function(a){ c.amp3 = a; }, configurable:!0 },
+                wave1Frequency: { get: function(){ return c.freq1; }, set: function(a){ c.freq1 = a; }, configurable:!0 },
+                wave2Frequency: { get: function(){ return c.freq2; }, set: function(a){ c.freq2 = a; }, configurable:!0 },
+                wave3Frequency: { get: function(){ return c.freq3; }, set: function(a){ c.freq3 = a; }, configurable:!0 },
+                wave1Phase: { get: function(){ return c.pha1; }, set: function(a){ c.pha1 = a; }, configurable:!0 },
+                wave2Phase: { get: function(){ return c.pha2; }, set: function(a){ c.pha2 = a; }, configurable:!0 },
+                wave3Phase: { get: function(){ return c.pha3; }, set: function(a){ c.pha3 = a; }, configurable:!0 }
+            });
+            window.addEventListener("resize", Z);
+            if (Y && Ea && g.length) {
+                x = new jsband.Queue();
+                x.delay = Fa;
+                k = 0;
+                for (w = g.length; k < w; k++)
+                    x.addTween(c, qa(g[k]), f.powOut(3), za, C);
+                x.addQueue(x);
+                x.run()
+            }
+            la && (k = function() {
+                var a = {}, b = 0;
+                na && !isNaN(na) && (a.pha1 = na, b++);
+                oa && !isNaN(oa) && (a.pha2 = oa, b++);
+                pa && !isNaN(pa) && (a.pha3 = pa, b++);
+                return b ? new jsband.Motion(c, a, C) : 0
+            }()) && k.play();
+            if (ya)
+                for (k = 1; 4 > k; k++)
+                    if (w = b["WAVE_" + k + "_SWING_SETTINGS"])
+                        for (D in w)
+                            (r = ra[D]) && (new jsband.Swing(c, r + k, w[D], C)).play();
+            C.addListener(E);
+            B && document.addEventListener("mousemove", R)
+        } else {
+            console.error("BlobAnimation: no element #" + M);
+        }
+    }
+    var Ha = {
+        linear: jsband.Ease.lin(), quad: jsband.Ease.pow(2), cubic: jsband.Ease.pow(3),
+        quart: jsband.Ease.pow(4), quint: jsband.Ease.pow(5), circ: jsband.Ease.circ(),
+        sine: jsband.Ease.sin(), expo: jsband.Ease.exp(), elastic: jsband.Ease.osc2Out(),
+        bounce: jsband.Ease.bncOut(), back: jsband.Ease.backOut()
+    };
+    var Ja = { sine: Math.sin, linear: jsband.Wave.triangle, pulse: jsband.Wave.pulse };
+    var Ia = { amp1: 1, freq1: 1, pha1: 1, amp2: 1, freq2: 1, pha2: 1, amp3: 1, freq3: 1, pha3: 1 };
+    var ra = { amplitude: "amp", frequency: "freq", phase: "pha" };
+    N.instances = {};
+    window.BlobAnimation = N;
+})();
+
+// ==================== ФОРМЫ ДЛЯ БЛОБА ====================
+var shapes = [
+    { wave1: { amplitude: 76.923, frequency: 0.879, phase: 0 }, wave2: { amplitude: 60, frequency: 0.165, phase: 0 }, wave3: { amplitude: 50, frequency: 0, phase: 0 } },
+    { wave1: { amplitude: 0, frequency: 0, phase: 0 }, wave2: { amplitude: 0, frequency: 0, phase: 0 }, wave3: { amplitude: 35, frequency: 10, phase: 0 } },
+    { wave1: { amplitude: 200, frequency: 7.692, phase: 6.283 }, wave2: { amplitude: 200, frequency: 7.912, phase: 6.283 }, wave3: { amplitude: 200, frequency: 10, phase: 6.283 } },
+    { wave1: { amplitude: 34.066, frequency: 5.934, phase: 0 }, wave2: { amplitude: 20.879, frequency: 6.154, phase: 0 }, wave3: { amplitude: 50.549, frequency: 0, phase: 0 } }
+];
+
+var blob_settings = {
+    BLOB_SIZE: 250,
+    BLOB_DISTANCE: 1000,
+    DETALISATION: 60,
+    PERSPECTIVE_DISTORTION: 1,
+    ROTATION_SPEED: 5,
+    DOT_SIZE: 1.5,
+    DOT_COLOR: "#88ccff",
+    MOUSE_DISTANCE_MIN: 20,
+    MOUSE_DISTANCE_MAX: 400,
+    MOUSE_SENSITIVITY: 1,
+    INERTIAL_TIME: 4,
+    INITIAL_SHAPE: shapes[0],
+    USE_WAVE_MOTION: true,
+    USE_WAVE_SWING: true,
+    USE_MORPHING: true,
+    MORPHING_AUTOPLAY: false,
+    MORPHING_DURATION: 1,
+    MORPHING_DELAY: 0,
+    MORPHING_TRANSITION_TYPE: "cubic",
+    MORPHING_SHAPES: [shapes[0], shapes[1], shapes[2], shapes[3]],
+    WAVE_1_MOTION_SPEED: 1.3,
+    WAVE_2_MOTION_SPEED: 0.8
+};
+
+// ==================== ЗАПУСК БЛОБА ====================
+function isMobileView() {
+    return window.matchMedia('(max-width: 640px)').matches;
+}
+
+var mobileAudioScale = 1;
+var mobileMaxBoost = [999, 999, 999];
+
+if (isMobileView()) {
+    Object.assign(blob_settings, {
+        BLOB_SIZE: 170,
+        BLOB_DISTANCE: 1400,
+        DETALISATION: 52,
+        DOT_SIZE: 1.45,
+        MOUSE_SENSITIVITY: 1.4
+    });
+    mobileAudioScale = 0.62;
+    mobileMaxBoost = [85, 75, 65];
+}
+
+function applyAudioAmplitude(baseAmp, volBoost, kickBoost, maxBoost) {
+    var value = baseAmp + volBoost + kickBoost;
+    if (isMobileView()) {
+        value = Math.min(value, baseAmp + maxBoost);
+    }
+    return value;
+}
+
+var defaultViewSettings = {
+    blobDistance: isMobileView() ? 1400 : 1000,
+    dotSize: isMobileView() ? 1.45 : 1.5
+};
+
+var shapeViewOverrides = {
+    2: { blobDistance: 1550, dotSize: 1.65 }
+};
+
+function applyShapeViewSettings(shapeIndex) {
+    var preset = shapeViewOverrides[shapeIndex] || defaultViewSettings;
+    blob.blobDistance = preset.blobDistance;
+    blob.dotSize = preset.dotSize;
+    applyShapeInteractionSettings(shapeIndex);
+}
+
+function applyShapeInteractionSettings(shapeIndex) {
+    document.body.classList.toggle('mode-chaos', shapeIndex === 2);
+    if (shapeIndex === 2) {
+        blob.mouseSensitivity = isMobileView() ? 3.4 : 2.4;
+        blob.rotationSpeed = isMobileView() ? 0.8 : 1.5;
+        blob.inertialTime = isMobileView() ? 6 : 4;
+        blob.mouseDistanceMax = 520;
+    } else {
+        blob.mouseSensitivity = isMobileView() ? 1.4 : 1;
+        blob.rotationSpeed = isMobileView() ? 4 : 5;
+        blob.inertialTime = 4;
+        blob.mouseDistanceMax = 400;
+    }
+}
+
+var blob = new BlobAnimation("blob_container", blob_settings);
+var currentShape = 0;
+blob.morphTo(shapes[0]);
+applyShapeViewSettings(0);
+
+// Кнопки форм
+document.querySelectorAll('.shape-btn').forEach((btn, idx) => {
+    btn.addEventListener('click', () => {
+        currentShape = idx;
+        blob.morphTo(shapes[idx]);
+        applyShapeViewSettings(idx);
+        if (idx === 2 && isMobileView()) {
+            document.getElementById('dbg').innerHTML = '> MODE 03 // DRAG=ROTATE DBL-TAP=PANEL';
+        }
+        document.querySelectorAll('.shape-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+    });
+});
+
+// ==================== АУДИО СИСТЕМА С ДЕТЕКТОМ БАС-УДАРА ====================
+var audioCtx = null;
+var analyser = null;
+var dataArray = null;
+var currentAudio = null;
+var isFilePlaying = false;
+var isMicActive = false;
+var animationId = null;
+
+var smoothVol = 0;
+var bassLevelPrev = 0;
+var kickTimer = 0;
+
+function getVolume() {
+    if (!analyser || !dataArray) return 0;
+    analyser.getByteFrequencyData(dataArray);
+    var sum = 0;
+    for (var i = 0; i < Math.min(dataArray.length, 60); i++) sum += dataArray[i];
+    return sum / 60 / 255;
+}
+
+function getBassKick() {
+    if (!analyser || !dataArray) return 0;
+    analyser.getByteFrequencyData(dataArray);
+    var bassSum = 0;
+    for (var i = 0; i < 8; i++) bassSum += dataArray[i];
+    var rawBass = bassSum / 8 / 255;
+    
+    var kick = 0;
+    if (rawBass > 0.4 && rawBass > bassLevelPrev * 1.5) {
+        kickTimer = 0.3;
+    }
+    bassLevelPrev = rawBass;
+    
+    if (kickTimer > 0) {
+        kickTimer -= 0.02;
+        return Math.min(1, kickTimer * 3);
+    }
+    return 0;
+}
+
+function updateVisualization() {
+    if (!isFilePlaying && !isMicActive) {
+        if (animationId) cancelAnimationFrame(animationId);
+        animationId = null;
+        return;
+    }
+    if (!analyser || !dataArray) {
+        animationId = requestAnimationFrame(updateVisualization);
+        return;
+    }
+    
+    var vol = getVolume();
+    var smooth = 0.3;
+    smoothVol += (vol - smoothVol) * smooth;
+    
+    var kickImpact = getBassKick();
+    
+    var base = shapes[currentShape];
+    var baseAmp1 = (base.wave1 && base.wave1.amplitude) || 70;
+    var baseAmp2 = (base.wave2 && base.wave2.amplitude) || 55;
+    var baseAmp3 = (base.wave3 && base.wave3.amplitude) || 45;
+    
+    blob.wave1Amplitude = applyAudioAmplitude(
+        baseAmp1,
+        smoothVol * 180 * mobileAudioScale,
+        kickImpact * 120 * mobileAudioScale,
+        mobileMaxBoost[0]
+    );
+    blob.wave2Amplitude = applyAudioAmplitude(
+        baseAmp2,
+        smoothVol * 150 * mobileAudioScale,
+        kickImpact * 100 * mobileAudioScale,
+        mobileMaxBoost[1]
+    );
+    blob.wave3Amplitude = applyAudioAmplitude(
+        baseAmp3,
+        smoothVol * 120 * mobileAudioScale,
+        kickImpact * 80 * mobileAudioScale,
+        mobileMaxBoost[2]
+    );
+    
+    var kickIcon = kickImpact > 0.1 ? "KICK " : "";
+    document.getElementById('dbg').innerHTML = `> LVL ${Math.floor(smoothVol * 100)}% | ${kickIcon}kick:${kickImpact.toFixed(2)} | a1:${blob.wave1Amplitude.toFixed(0)} a2:${blob.wave2Amplitude.toFixed(0)} a3:${blob.wave3Amplitude.toFixed(0)}`;
+    
+    animationId = requestAnimationFrame(updateVisualization);
+}
+
+async function playMP3(file) {
+    // Останавливаем всё
+    if (isFilePlaying && currentAudio) {
+        currentAudio.pause();
+        currentAudio = null;
+    }
+    if (isMicActive) {
+        if (audioCtx) await audioCtx.close();
+        isMicActive = false;
+        document.getElementById('micBtn').classList.remove('active');
+    }
+    if (animationId) cancelAnimationFrame(animationId);
+    
+    var audio = new Audio();
+    audio.setAttribute('playsinline', '');
+    audio.setAttribute('webkit-playsinline', '');
+    audio.src = URL.createObjectURL(file);
+    currentAudio = audio;
+    
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 256;
+    analyser.smoothingTimeConstant = 0.6;
+    dataArray = new Uint8Array(analyser.frequencyBinCount);
+    
+    var source = audioCtx.createMediaElementSource(audio);
+    source.connect(analyser);
+    analyser.connect(audioCtx.destination);
+    
+    // Ждём user gesture для play()
+    await audioCtx.resume();
+    
+    // Важно: создать источник ДО того, как аудио начнёт играть
+    var playPromise = audio.play();
+    if (playPromise !== undefined) {
+        playPromise.catch(e => {
+            console.log("Play error:", e);
+            document.getElementById('dbg').innerHTML = "> ERR: TAP [ PLAY ]";
+        });
+    }
+    
+    isFilePlaying = true;
+    
+    document.getElementById('playPauseBtn').disabled = false;
+    document.getElementById('playPauseBtn').textContent = '[ || ]';
+    document.getElementById('hintText') && (document.getElementById('hintText').innerHTML = '🎵 MP3 · бас-удары дёргают форму');
+    
+    function updateTime() {
+        if (currentAudio && isFilePlaying && currentAudio.duration) {
+            var cur = currentAudio.currentTime;
+            var dur = currentAudio.duration;
+            document.getElementById('timeDisplay').innerText = `${Math.floor(cur/60)}:${Math.floor(cur%60).toString().padStart(2,'0')} / ${Math.floor(dur/60)}:${Math.floor(dur%60).toString().padStart(2,'0')}`;
+            requestAnimationFrame(updateTime);
+        }
+    }
+    updateTime();
+    updateVisualization();
+    
+    audio.addEventListener('ended', () => {
+        isFilePlaying = false;
+        document.getElementById('playPauseBtn').textContent = '[ PLAY ]';
+        var base = shapes[currentShape];
+        blob.wave1Amplitude = (base.wave1 && base.wave1.amplitude) || 70;
+        blob.wave2Amplitude = (base.wave2 && base.wave2.amplitude) || 55;
+        blob.wave3Amplitude = (base.wave3 && base.wave3.amplitude) || 45;
+    });
+}
+
+function stopPlayback() {
+    if (currentAudio) {
+        currentAudio.pause();
+        currentAudio = null;
+    }
+    isFilePlaying = false;
+    if (audioCtx) {
+        audioCtx.close().catch(e=>{});
+        audioCtx = null;
+    }
+    analyser = null;
+    dataArray = null;
+    document.getElementById('playPauseBtn').textContent = '[ PLAY ]';
+    document.getElementById('playPauseBtn').disabled = true;
+    document.getElementById('timeDisplay').innerText = '--:-- / --:--';
+    if (animationId) cancelAnimationFrame(animationId);
+    animationId = null;
+}
+
+document.getElementById('mp3Upload').addEventListener('change', (e) => {
+    if (e.target.files && e.target.files[0]) {
+        playMP3(e.target.files[0]);
+    }
+});
+
+document.getElementById('playPauseBtn').addEventListener('click', () => {
+    if (currentAudio && isFilePlaying) {
+        currentAudio.pause();
+        isFilePlaying = false;
+        document.getElementById('playPauseBtn').textContent = '[ PLAY ]';
+        if (audioCtx) audioCtx.suspend();
+    } else if (currentAudio && !isFilePlaying) {
+        var playPromise = currentAudio.play();
+        if (playPromise !== undefined) {
+            playPromise.then(() => {
+                isFilePlaying = true;
+                if (audioCtx) audioCtx.resume();
+                document.getElementById('playPauseBtn').textContent = '[ || ]';
+                updateVisualization();
+            }).catch(e => {
+                document.getElementById('dbg').innerHTML = "> ERR: " + e.message;
+            });
+        }
+    }
+});
+
+document.getElementById('micBtn').addEventListener('click', async () => {
+    if (isFilePlaying) stopPlayback();
+    if (isMicActive) {
+        if (audioCtx) await audioCtx.close();
+        isMicActive = false;
+        document.getElementById('micBtn').classList.remove('active');
+        document.getElementById('dbg').innerHTML = "> MIC OFF";
+        if (animationId) cancelAnimationFrame(animationId);
+        animationId = null;
+        return;
+    }
+    try {
+        var stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 256;
+        dataArray = new Uint8Array(analyser.frequencyBinCount);
+        var source = audioCtx.createMediaStreamSource(stream);
+        source.connect(analyser);
+        await audioCtx.resume();
+        isMicActive = true;
+        document.getElementById('micBtn').classList.add('active');
+        updateVisualization();
+    } catch(e) {
+        document.getElementById('dbg').innerHTML = "> ERR: NO MIC ACCESS";
+    }
+});
+
+function emitMouse(type, touch) {
+    document.dispatchEvent(new MouseEvent(type, {
+        clientX: touch.clientX,
+        clientY: touch.clientY,
+        bubbles: true,
+        cancelable: true,
+        view: window
+    }));
+}
+
+var blobContainer = document.getElementById('blob_container');
+var touchStart = null;
+var touchMoved = false;
+var lastPanelTap = 0;
+
+blobContainer.addEventListener('touchstart', function(e) {
+    if (e.touches.length !== 1) return;
+    var t = e.touches[0];
+    touchStart = { x: t.clientX, y: t.clientY };
+    touchMoved = false;
+    emitMouse('mousemove', t);
+}, { passive: true });
+
+blobContainer.addEventListener('touchmove', function(e) {
+    if (e.touches.length !== 1 || !touchStart) return;
+    var t = e.touches[0];
+    var dx = t.clientX - touchStart.x;
+    var dy = t.clientY - touchStart.y;
+    if (Math.abs(dx) + Math.abs(dy) > 8) {
+        touchMoved = true;
+    }
+    if (touchMoved) {
+        e.preventDefault();
+        emitMouse('mousemove', t);
+    }
+}, { passive: false });
+
+blobContainer.addEventListener('touchend', function() {
+    if (!isMobileView() || !touchStart) {
+        touchStart = null;
+        return;
+    }
+
+    if (!touchMoved) {
+        var now = Date.now();
+        if (currentShape === 2) {
+            if (now - lastPanelTap < 320) {
+                document.body.classList.toggle('controls-visible');
+                lastPanelTap = 0;
+            } else {
+                lastPanelTap = now;
+            }
+        } else {
+            document.body.classList.toggle('controls-visible');
+        }
+    }
+
+    touchStart = null;
+    touchMoved = false;
+});
+
+if (isMobileView()) {
+    document.querySelectorAll('.ui').forEach(function(el) {
+        el.addEventListener('touchstart', function(e) {
+            e.stopPropagation();
+        });
+        el.addEventListener('click', function(e) {
+            e.stopPropagation();
+        });
+    });
+}
+
+function handleResize() {
+    if (blob && blob.resize) blob.resize();
+}
+window.addEventListener('resize', handleResize);
+window.addEventListener('orientationchange', function() {
+    setTimeout(handleResize, 150);
+});
+setTimeout(handleResize, 100);
+document.getElementById('dbg').innerHTML = isMobileView()
+    ? '> READY // TAP TO OPEN'
+    : '> READY // LOAD AUDIO';
+</script>
+</body>
+</html>
